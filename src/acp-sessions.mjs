@@ -203,6 +203,11 @@ export function sendToSession(config, sessionId, { from, body, role }) {
     created_at: new Date().toISOString()
   };
 
+  const maxMessages = acpCfg.max_messages_per_session || 200;
+  if (session.messages.length >= maxMessages) {
+    return { ok: false, error: `Session message limit (${maxMessages}) reached` };
+  }
+
   session.messages.push(message);
   session.updated_at = new Date().toISOString();
   saveSessions(sessionsFile, sessions);

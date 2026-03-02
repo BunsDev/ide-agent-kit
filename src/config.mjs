@@ -39,6 +39,7 @@ const DEFAULT_CONFIG = {
     session_timeout_sec: 3600,
     max_concurrent_sessions: 5,
     receipt_all_actions: true,
+    max_messages_per_session: 200,
     sessions_file: '/tmp/iak-acp-sessions.json'
   }
 };

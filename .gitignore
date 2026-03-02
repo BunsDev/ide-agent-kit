@@ -5,3 +5,4 @@ ide-agent-kit.json
 .env
 *.log
 /tmp/
+data/*.json
