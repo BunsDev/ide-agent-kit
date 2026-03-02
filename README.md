@@ -39,6 +39,7 @@ Run allowlisted commands in a named tmux session, capture output + exit code.
 9. **Receipts** - append-only JSONL receipts with trace IDs + idempotency keys.
 10. **Session keepalive** - prevent macOS display/idle sleep for long-running remote sessions.
 11. **IDE init** - generate starter configs for Claude Code, Codex, Cursor, or VS Code.
+12. **ACP sessions** - Agent Client Protocol integration for internal agent orchestration with token-gated access, allowlists, and full receipt trail.
 
 No dependencies. Node.js ≥ 18 only.
 
@@ -347,6 +348,55 @@ Config:
 }
 ```
 
+### ACP — Agent Client Protocol (`src/acp-sessions.mjs`)
+
+Internal control-plane layer for agent session orchestration. ACP handles session lifecycle (create, send, close), token-gated access, agent/harness allowlists, and full receipt logging including denied requests. Secure by default: disabled until explicitly enabled in config.
+
+```bash
+# Spawn a session
+node bin/cli.mjs acp spawn --agent @claudemm --task "Review PR #42" --mode one-shot --config config.json
+
+# List active sessions
+node bin/cli.mjs acp list --status active --config config.json
+
+# Send a message to a session
+node bin/cli.mjs acp send --session <id> --body "LGTM" --from @ether --config config.json
+
+# Check session status
+node bin/cli.mjs acp status --session <id> --config config.json
+
+# Close a session
+node bin/cli.mjs acp close --session <id> --reason "task complete" --config config.json
+```
+
+The webhook server also accepts ACP requests at `POST /acp` with token auth via `X-ACP-Token` header or `token` body field.
+
+Config:
+```json
+{
+  "acp": {
+    "enabled": false,
+    "token": "your-secret-token",
+    "allowed_agents": ["@claudemm", "@ether"],
+    "allowed_harnesses": [],
+    "session_timeout_sec": 3600,
+    "max_concurrent_sessions": 5,
+    "max_messages_per_session": 200,
+    "receipt_all_actions": true,
+    "sessions_file": "./data/acp-sessions.json"
+  }
+}
+```
+
+Security controls:
+- **Disabled by default** (opt-in via `acp.enabled`)
+- **Token-gated** with constant-time comparison
+- **Agent allowlist** (empty = deny all)
+- **Harness allowlist** for restricting which harnesses can be used
+- **Session limits**: max concurrent sessions, per-session message cap, configurable timeout
+- **Receipt trail**: every action logged, including denied requests with reason codes
+- **Localhost only**: no public exposure
+
 ### Other modules
 
 **Receipts** (`src/receipt.mjs`) provides an append-only JSONL receipt log with trace IDs and idempotency keys for auditing every action. **Emit** (`src/emit.mjs`) sends receipts or arbitrary payloads to external webhook URLs. **Memory** (`src/memory.mjs`) offers persistent key-value storage for agents across sessions. **Session Keepalive** (`src/session-keepalive.mjs`) manages macOS `caffeinate` to prevent display and idle sleep during long-running remote sessions. **tmux Runner** (`src/tmux-runner.mjs`) executes allowlisted commands in tmux sessions with output capture. **Watch** (`src/watch.mjs`) monitors JSONL queue files for changes.
@@ -371,6 +421,7 @@ ide-agent-kit receipt tail [--n <count>]
 ide-agent-kit gateway <health|agents|trigger|wake> [options]
 ide-agent-kit memory <list|get|set|append|delete|search> [options]
 ide-agent-kit init [--ide <claude-code|codex|cursor|vscode|gemini>] [--profile <balanced|low-friction>]
+ide-agent-kit acp <spawn|list|status|send|close> [options]
 ide-agent-kit keepalive <start|stop|status> [--pid-file <path>] [--heartbeat-sec <sec>]
 ```
 
