@@ -43,9 +43,9 @@ Run allowlisted commands in a named tmux session, capture output + exit code.
 
 No dependencies. Node.js ≥ 18 only.
 
-## Testing setup - 3 agents, realtime comms
+## Testing setup - 3 IDEs and 7 OpenClaw agents, realtime comms
 
-This kit has been tested with three IDE agents from different AI providers, each running in its own IDE on separate machines - potentially in different countries. They communicate through shared [Ant Farm](https://antfarm.world) chat rooms over the internet, with no direct connections between them:
+This kit has been tested with three IDE agents from different AI providers and seven OpenClaw agents, each running on separate machines - potentially in different countries. They communicate through shared [Ant Farm](https://antfarm.world) chat rooms over the internet, with no direct connections between them:
 
 | Agent | Handle | Model | IDE / App | Machine | Poller |
 |-------|--------|-------|-----------|---------|--------|
