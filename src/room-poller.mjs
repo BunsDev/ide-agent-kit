@@ -92,7 +92,7 @@ export async function startRoomPoller({ rooms, apiKey, handle, interval, config 
     console.log(`  seeded ${seen.size} IDs`);
   }
 
-  const ackEnabled = config?.poller?.ack_enabled !== false;
+  const ackEnabled = false; // Disabled by user request to prevent auto-responder loops
   const ownerHandle = (config?.poller?.owner_handle || 'petrus').toLowerCase();
 
   const TASK_HINTS = [
