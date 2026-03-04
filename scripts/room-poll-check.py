@@ -2,7 +2,7 @@
 
 # SPDX-License-Identifier: AGPL-3.0-only
 
-"""Check for new Ant Farm room messages, optionally post focused auto-acks, append inbox file."""
+"""Check for new Ant Farm room messages, append inbox file."""
 
 import json
 import os
@@ -22,24 +22,6 @@ MY_HANDLES = tuple(
 OWNER_HANDLE = os.getenv("IAK_OWNER_HANDLE", "petrus").lower()
 TARGET_HANDLE = os.getenv("IAK_TARGET_HANDLE", "@claudemm")
 SEEN_FILE = os.getenv("IAK_SEEN_FILE", "/tmp/iak_seen_ids.txt")
-ACKED_FILE = os.getenv("IAK_ACKED_FILE", "/tmp/iak_acked_ids.txt")
-NEW_FILE = os.getenv("IAK_NEW_FILE", "/tmp/iak_new_messages.txt")
-FETCH_LIMIT = int(os.getenv("IAK_FETCH_LIMIT", "20"))
-ACK_ENABLED = os.getenv("IAK_ACK_ENABLED", "1").lower() not in ("0", "false", "no")
-# Listen modes: "all" = every message, "humans" = skip bot messages,
-# "tagged" = only when @mentioned, "owner" = only from owner
-LISTEN_MODE = os.getenv("IAK_LISTEN_MODE", "all").lower()
-BOT_HANDLES = tuple(
-    h.strip() for h in os.getenv(
-        "IAK_BOT_HANDLES", ""
-    ).split(",") if h.strip()
-)
-
-TASK_HINTS = (
-    "can you", "please", "need to", "check", "fix", "update", "review",
-    "run", "deploy", "implement", "test", "restart", "install", "respond",
-    "post", "pull", "push", "merge"
-)
 
 
 def _load_id_set(path: str) -> Set[str]:
@@ -88,45 +70,6 @@ def _passes_listen_filter(handle: str, author_handle: str, body: str) -> bool:
     return True
 
 
-def _message_targets_me(body: str) -> bool:
-    mentions = _extract_mentions(body)
-    my_short = {h.lower().lstrip("@") for h in MY_HANDLES}
-    if mentions:
-        return any(m in my_short for m in mentions)
-    # If no explicit mentions, treat owner imperatives as potentially addressed to current agent.
-    return True
-
-
-def _looks_like_task_request(body: str) -> bool:
-    text = (body or "").strip().lower()
-    if not text:
-        return False
-    return any(hint in text for hint in TASK_HINTS)
-
-
-def _should_ack(handle: str, author_handle: str, body: str) -> bool:
-    from_owner = OWNER_HANDLE in str(author_handle).lower() or OWNER_HANDLE in str(handle).lower()
-    if not from_owner:
-        return False
-    if not _message_targets_me(body):
-        return False
-    return _looks_like_task_request(body)
-
-
-def _post_ack(room: str, text: str) -> None:
-    payload = json.dumps({"room": room, "body": text})
-    subprocess.run(
-        [
-            "curl", "-sS", "-X", "POST", f"{BASE_URL}/messages",
-            "-H", f"X-API-Key: {API_KEY}",
-            "-H", "Content-Type: application/json",
-            "-d", payload,
-        ],
-        capture_output=True,
-        text=True,
-        timeout=15,
-        check=False,
-    )
 
 
 def _fetch_room_messages(room: str) -> List[dict]:
@@ -153,7 +96,6 @@ def main() -> int:
         return 0
 
     seen = _load_id_set(SEEN_FILE)
-    acked = _load_id_set(ACKED_FILE)
     new_msgs: List[str] = []
 
     for room in ROOMS:
@@ -179,16 +121,7 @@ def main() -> int:
 
             new_msgs.append(f"[{ts}] [{room}] {author_handle}: {body[:400]}")
 
-            if ACK_ENABLED and mid not in acked and _should_ack(handle, author_handle, body):
-                _post_ack(
-                    room,
-                    f"@{OWNER_HANDLE} [{TARGET_HANDLE.lstrip('@')}] starting now. "
-                    "I will report back when finished with results."
-                )
-                acked.add(mid)
-
     _save_id_set(SEEN_FILE, seen, keep_last=1000)
-    _save_id_set(ACKED_FILE, acked, keep_last=1000)
 
     if new_msgs:
         with open(NEW_FILE, "a", encoding="utf-8") as f:

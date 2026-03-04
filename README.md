@@ -17,7 +17,7 @@ Run allowlisted commands in a named tmux session, capture output + exit code.
 ## v0.1 primitives
 
 1. **Webhook relay** - ingest GitHub webhooks, normalize to a stable JSON schema, append to a local queue.
-2. **Room poller** - watch Ant Farm chat rooms, auto-ack task requests, nudge IDE agents via tmux.
+2. **Room poller** - watch Ant Farm chat rooms, nudge IDE agents via tmux. (Read-only, strict no-autoresponder policy)
 3. **tmux runner** - run allowlisted commands in a named tmux session, capture output + exit code.
 4. **Receipts** - append-only JSONL receipts with trace IDs + idempotency keys.
 5. **Session keepalive** - prevent macOS display/idle sleep for long-running remote sessions.
@@ -42,7 +42,7 @@ All three agents share the same rooms (`feature-admin-planning`, `thinkoff-devel
 Each agent runs in its own tmux session on its own machine. A background poller script watches the room API for new messages. When a new message arrives:
 
 1. The poller detects it (every 8-10s)
-2. If from the owner and looks like a task request → posts an immediate auto-ack
+2. If from the owner and looks like a task request → flags the message internally
 3. Sends a tmux keystroke nudge (`check rooms` + Enter) to the IDE agent's session
 4. The IDE agent reads the full message and responds with its own intelligence
 
@@ -125,7 +125,7 @@ The repo includes three poller implementations for watching Ant Farm chat rooms:
 **Generic poller** (`scripts/room-poll.sh` + `scripts/room-poll-check.py`):
 - Works with any agent (Claude Code, Codex, etc.)
 - Env-var-driven, no hardcoded secrets
-- Auto-acks task requests from the owner
+- Read-only processing strictly enforced by security rules
 - Nudges IDE agent via tmux keystrokes
 
 **Gemini poller** (`tools/geminimb_room_autopost.sh`):
@@ -147,10 +147,9 @@ The repo includes three poller implementations for watching Ant Farm chat rooms:
 | `IAK_ROOMS` | `thinkoff-development,feature-admin-planning,lattice-qcd` | Rooms to watch |
 | `IAK_SELF_HANDLES` | `@claudemm,claudemm` | This agent's handles (skip own messages) |
 | `IAK_TARGET_HANDLE` | `@claudemm` | Handle used in ack messages |
-| `IAK_OWNER_HANDLE` | `petrus` | Only auto-ack from this user |
+| `IAK_OWNER_HANDLE` | `petrus` | Only listen to task requests from this user |
 | `IAK_TMUX_SESSION` | `claude` | tmux session to nudge |
 | `IAK_POLL_INTERVAL` | `10` | Seconds between polls |
-| `IAK_ACK_ENABLED` | `1` | Auto-ack task requests (`1`/`0`) |
 | `IAK_NUDGE_TEXT` | `check rooms` | Text sent to tmux on new messages |
 | `IAK_LISTEN_MODE` | `all` | Filter: `all`, `humans`, `tagged`, or `owner` |
 | `IAK_BOT_HANDLES` | (empty) | Comma-separated bot handles for `humans` mode |
@@ -264,6 +263,10 @@ ide-agent-kit receipt tail [--n <count>]
 ide-agent-kit init [--ide <claude-code|codex|cursor|vscode|gemini>] [--profile <balanced|low-friction>]
 ide-agent-kit keepalive <start|stop|status> [--pid-file <path>] [--heartbeat-sec <sec>]
 ```
+
+## SECURITY
+
+**Strict No-Autoresponder Policy**: The IDE Agent Kit strictly prohibits automated identity-impersonating messaging or auto-ack template responses within chat environments. The `team-relay` bridging tools are entirely read-only by design. Agents must formulate and send their own native responses. If active messaging is required, it must happen directly through the respective agent APIs.
 
 ## Config
 

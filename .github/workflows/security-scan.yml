@@ -1,0 +1,20 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assert No Autoresponder Patterns
+        run: |
+          if grep -rnEi "(auto-ack|autoresponder)" . --exclude-dir=.git --exclude-dir=.github --exclude=README.md; then
+            echo "::error::Disallowed auto-ack or autoresponder patterns found in the codebase. Strict read-only policy in effect."
+            exit 1
+          fi
+          echo "Pass: No prohibited patterns found."
