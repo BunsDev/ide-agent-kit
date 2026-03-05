@@ -5,29 +5,32 @@
 import { parseArgs } from 'node:util';
 import { readFileSync } from 'node:fs';
 import { loadConfig } from '../src/config.mjs';
-import { tmuxRun } from '../src/tmux-runner.mjs';
-import { tailReceipts } from '../src/receipt.mjs';
-import { startWebhookServer } from '../src/webhook-server.mjs';
-import { emitJson } from '../src/emit.mjs';
-import { watchQueue } from '../src/watch.mjs';
-import { startRoomPoller, checkRoomMessages } from '../src/room-poller.mjs';
-import { memoryList, memoryGet, memorySet, memoryAppend, memoryDelete, memorySearch } from '../src/memory.mjs';
+// --- team-relay (generic room/comms) ---
+import { tailReceipts } from '../src/team-relay/receipt.mjs';
+import { startWebhookServer } from '../src/team-relay/webhook-server.mjs';
+import { emitJson } from '../src/team-relay/emit.mjs';
+import { startRoomPoller, checkRoomMessages } from '../src/team-relay/room-poller.mjs';
+import { memoryList, memoryGet, memorySet, memoryAppend, memoryDelete, memorySearch } from '../src/team-relay/memory.mjs';
+import { moltbookPost, moltbookFeed } from '../src/team-relay/moltbook.mjs';
+import { startRoomAutomation } from '../src/team-relay/room-automation.mjs';
+import { pollDiscord, startDiscordPoller } from '../src/team-relay/discord-poller.mjs';
+import { UnifiedPoller } from '../src/team-relay/unified-poller.mjs';
+import { antfarmAdapter } from '../src/team-relay/adapters/antfarm.mjs';
+import { discordAdapter } from '../src/team-relay/adapters/discord.mjs';
+import { xforAdapter } from '../src/team-relay/adapters/xfor.mjs';
+import { commentsAdapter } from '../src/team-relay/adapters/comments.mjs';
+import { isEnabled as acpIsEnabled, createSession as acpCreate, sendToSession as acpSend, closeSession as acpClose, getSession as acpGet, listSessions as acpList } from '../src/team-relay/acp-sessions.mjs';
+// --- ide-specific ---
+import { tmuxRun } from '../src/ide/tmux-runner.mjs';
+import { watchQueue } from '../src/ide/watch.mjs';
+import { pollComments, startCommentPoller } from '../src/ide/comment-poller.mjs';
+// --- openclaw (shared) ---
 import { triggerAgent, healthCheck, healthDeep, agentsList, configGet, configPatch, gatewayRestart } from '../src/openclaw-gateway.mjs';
 import { sessionsSend, sessionsSpawn, sessionsList, sessionsHistory, sessionsStatus } from '../src/openclaw-sessions.mjs';
 import { execApprovalRequest, execApprovalWait, execApprovalResolve, execApprovalList } from '../src/openclaw-exec.mjs';
 import { listHooks, createForwarderHook, deleteHook } from '../src/openclaw-hooks.mjs';
 import { cronList, cronAdd, cronRemove, cronRun, cronStatus } from '../src/openclaw-cron.mjs';
 import { keepaliveStart, keepaliveStop, keepaliveStatus } from '../src/session-keepalive.mjs';
-import { moltbookPost, moltbookFeed } from '../src/moltbook.mjs';
-import { startRoomAutomation } from '../src/room-automation.mjs';
-import { pollComments, startCommentPoller } from '../src/comment-poller.mjs';
-import { pollDiscord, startDiscordPoller } from '../src/discord-poller.mjs';
-import { UnifiedPoller } from '../src/unified-poller.mjs';
-import { antfarmAdapter } from '../src/adapters/antfarm.mjs';
-import { discordAdapter } from '../src/adapters/discord.mjs';
-import { xforAdapter } from '../src/adapters/xfor.mjs';
-import { commentsAdapter } from '../src/adapters/comments.mjs';
-import { isEnabled as acpIsEnabled, createSession as acpCreate, sendToSession as acpSend, closeSession as acpClose, getSession as acpGet, listSessions as acpList } from '../src/acp-sessions.mjs';
 
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 const args = process.argv.slice(2);
