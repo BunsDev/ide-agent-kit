@@ -60,24 +60,14 @@ export function watchQueue(config, onNewEvent) {
       if (onNewEvent) onNewEvent(event);
     }
 
-    // Nudge ide session
-    nudgeIde(session, nudgeText);
+    // Nudge tmux session
+    nudgeTmux(session, nudgeText);
   });
 
   return watcher;
 }
 
-function nudgeIde(session, text) {
-  const agCliPath = '/Applications/Antigravity.app/Contents/Resources/app/bin/antigravity';
-  if (import('node:fs').then(fs => fs.existsSync(agCliPath)).catch(() => false) || require('fs').existsSync(agCliPath)) {
-    try {
-      execSync(`"${agCliPath}" chat -r ${JSON.stringify(text)}`);
-      return;
-    } catch (e) {
-      // Fallback if it fails
-    }
-  }
-
+function nudgeTmux(session, text) {
   try {
     execSync(`tmux has-session -t ${JSON.stringify(session)} 2>/dev/null`);
   } catch {
@@ -91,7 +81,7 @@ function nudgeIde(session, text) {
     setTimeout(() => {
       try {
         execSync(`tmux send-keys -t ${JSON.stringify(session)} Enter`);
-      } catch { }
+      } catch {}
     }, 300);
     console.log(`  nudged tmux session "${session}"`);
   } catch (e) {
