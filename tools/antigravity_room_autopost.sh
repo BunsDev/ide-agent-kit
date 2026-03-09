@@ -15,6 +15,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 ENV_FILE="$ROOT_DIR/.env.local"
+SCRIPT_PATH="$SCRIPT_DIR/$(basename "$0")"
 
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "Missing env file: $ENV_FILE"
@@ -397,7 +398,7 @@ if [[ "${1:-}" == "tmux" ]]; then
         exit 0
       fi
       # Forward all relevant env vars into the tmux child session
-      env_prefix=""
+      env_prefix=()
       for var in ROOMS POLL_INTERVAL FETCH_LIMIT MENTION_ONLY SMART_MODE \
                  POLLER_NAME SESSION AGENT_HANDLE SOURCE_TAG API_KEY_ENV_CANDIDATES \
                  STATE_PREFIX \
@@ -406,10 +407,15 @@ if [[ "${1:-}" == "tmux" ]]; then
                  NO_PLACEHOLDER_ACK PRIME_ON_START RESPOND_TO_HANDLE \
                  AUTORESPONDER_ENABLED REAL_REPLY_ONLY; do
         if [[ -n "${!var:-}" ]]; then
-          env_prefix="${env_prefix}${var}=${!var} "
+          env_prefix+=("${var}=${!var}")
         fi
       done
-      tmux new-session -d -s "$SESSION" "env ${env_prefix}$0"
+      tmux_cmd="cd $(printf '%q' "$ROOT_DIR") && env"
+      for env_kv in "${env_prefix[@]}"; do
+        tmux_cmd+=" $(printf '%q' "$env_kv")"
+      done
+      tmux_cmd+=" $(printf '%q' "$SCRIPT_PATH")"
+      tmux new-session -d -s "$SESSION" "$tmux_cmd"
       echo "Started $SESSION (rooms=$ROOMS_CSV interval=${POLL_INTERVAL}s mention_only=$MENTION_ONLY)"
       ;;
     *)
