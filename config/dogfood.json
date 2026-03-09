@@ -36,37 +36,41 @@
     "message_interval_sec": 30
   },
   "openclaw": {
-    "home": "$OPENCLAW_HOME",
+    "home": "/Users/family/openclaw",
     "bin": "openclaw",
-    "ssh": "",
+    "ssh": "family@localhost",
     "host": "127.0.0.1",
     "port": 18791,
     "token": "CHANGE_ME"
   },
   "discord": {
     "channels": [
-      { "id": "CHANGE_ME", "name": "general" }
+      { "id": "1474426061218386094", "name": "general" },
+      { "id": "1474427350434189352", "name": "agent-puzzles" },
+      { "id": "1474427384945184932", "name": "outreach" },
+      { "id": "1474427386693943296", "name": "bot-fleet" },
+      { "id": "1474427387621015606", "name": "dev" }
     ],
     "interval_sec": 30,
-    "self_id": "CHANGE_ME",
+    "self_id": "1474422169470636134",
     "skip_bots": false,
     "seen_file": "/tmp/iak-discord-seen.txt"
   },
   "poller": {
-    "rooms": ["your-room-name"],
-    "api_key": "CHANGE_ME",
-    "handle": "@your-agent",
+    "rooms": ["thinkoff-development", "thinkoff-outreach", "ant-farm-management", "trading-tournament", "senbox-dev", "feature-admin-planning", "lattice-qcd"],
+    "api_key": "xfb_a71acdf98be644bd0b015c39cf18dfcff333cc3e4bc83484c2cae9400fde8fcc",
+    "handle": "@claudemm",
     "interval_sec": 10,
-    "owner_handle": "your-username",
+    "owner_handle": "petrus",
     "ack_enabled": false,
     "seen_file": "/tmp/iak-seen-ids.txt"
   },
   "moltbook": {
     "api_base": "https://www.moltbook.com/api/v1",
     "accounts": [
-      { "name": "your-account", "api_key": "CHANGE_ME" }
+      { "name": "claudemm", "api_key": "moltbook_sk_reB71c5cLPjUFaLJ7DEv4F4wrWQ962K0" }
     ],
-    "default_account": "your-account"
+    "default_account": "claudemm"
   },
   "comments": {
     "moltbook": {
@@ -74,7 +78,8 @@
     },
     "github": {
       "repos": [
-        { "owner": "your-org", "repo": "your-repo", "type": "issues" }
+        { "owner": "ThinkOffApp", "repo": "ide-agent-kit", "type": "issues" },
+        { "owner": "ThinkOffApp", "repo": "ClawWatch", "type": "issues" }
       ]
     },
     "interval_sec": 120,
@@ -84,17 +89,17 @@
     "rules": [
       {
         "name": "owner-task-nudge",
-        "match": { "sender": "your-username", "mention": "@your-agent" },
+        "match": { "sender": "petrus", "mention": "@claudemm" },
         "action": { "type": "nudge", "text": "check rooms" }
       },
       {
         "name": "check-comments-request",
-        "match": { "sender": "your-username", "keywords": ["check comments", "poll comments", "new comments"] },
+        "match": { "sender": "petrus", "keywords": ["check comments", "poll comments", "new comments"] },
         "action": { "type": "nudge", "text": "check comments" }
       },
       {
         "name": "status-request",
-        "match": { "sender": "your-username", "keywords": ["status", "how are you"] },
+        "match": { "sender": "petrus", "keywords": ["status", "how are you"] },
         "action": { "type": "nudge", "text": "check rooms" }
       }
     ],

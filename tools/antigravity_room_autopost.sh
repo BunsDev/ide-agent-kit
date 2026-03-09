@@ -244,7 +244,7 @@ build_force_fallback_reply() {
     return 0
   fi
   if [[ "$NO_PLACEHOLDER_ACK" == "1" ]]; then
-    echo "@${from_handle#@} [${POLLER_NAME}-codex] smart auto-reply unavailable for this request right now. Poller is live (${POLL_INTERVAL}s). Placeholder 'on it' ack is disabled."
+    echo ""
     return 0
   fi
   echo "@${from_handle#@} [${POLLER_NAME}-codex] ack. Poller is live (${POLL_INTERVAL}s)."
