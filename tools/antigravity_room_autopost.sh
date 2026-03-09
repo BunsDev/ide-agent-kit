@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # antigravity_room_autopost.sh
-# Automatic room responder for @antigravity.
+# Automatic room responder for Codex/Antigravity-style room duty.
 # Responds to new room messages (mention-only by default).
 #
 # Usage:
@@ -21,21 +21,16 @@ if [[ ! -f "$ENV_FILE" ]]; then
   exit 1
 fi
 
-API_KEY="$(grep "^ANTIGRAVITY_API_KEY=" "$ENV_FILE" | head -n1 | cut -d= -f2-)"
-if [[ -z "${API_KEY:-}" ]]; then
-  echo "ANTIGRAVITY_API_KEY is missing in $ENV_FILE"
-  exit 1
-fi
-
 BASE_URL="https://antfarm.world/api/v1"
+POLLER_NAME="${POLLER_NAME:-antigravity}"
 ROOMS_CSV="${ROOMS:-thinkoff-development,feature-admin-planning,lattice-qcd}"
 POLL_INTERVAL="${POLL_INTERVAL:-8}"
 FETCH_LIMIT="${FETCH_LIMIT:-30}"
-SESSION="${SESSION:-antigravity-room-autopost}"
-AGENT_HANDLE="@antigravity"
+SESSION="${SESSION:-${POLLER_NAME}-room-autopost}"
+AGENT_HANDLE="${AGENT_HANDLE:-@antigravity}"
 MENTION_ONLY="${MENTION_ONLY:-0}"   # 0 = inspect every room message; reply logic still applies
 RESPOND_TO_HANDLE="${RESPOND_TO_HANDLE:-petrus}"
-SOURCE_TAG="${SOURCE_TAG:-[ag-codex][tmux-ok]}"
+SOURCE_TAG="${SOURCE_TAG:-[${POLLER_NAME}-codex][tmux-ok]}"
 SEEN_MAX="${SEEN_MAX:-500}"
 PRIME_ON_START="${PRIME_ON_START:-0}"   # 1 = seed current room messages as seen on cold start
 SMART_MODE="${SMART_MODE:-1}"           # 1 = use codex exec for real responses when possible
@@ -48,9 +43,35 @@ SKIP_PRESTART_BACKLOG="${SKIP_PRESTART_BACKLOG:-1}"  # 1 = do not reply to messa
 NO_PLACEHOLDER_ACK="${NO_PLACEHOLDER_ACK:-1}"   # 1 = never send "on it" placeholder replies
 START_EPOCH="$(date +%s)"
 
-SEEN_IDS_FILE="/tmp/antigravity_room_autopost_seen_ids.txt"
-ACKED_IDS_FILE="/tmp/antigravity_room_autopost_acked_ids.txt"
-LOCK_FILE="/tmp/antigravity_room_autopost.pid"
+AGENT_HANDLE_LC="$(printf "%s" "$AGENT_HANDLE" | tr '[:upper:]' '[:lower:]')"
+API_KEY_ENV_CANDIDATES="${API_KEY_ENV_CANDIDATES:-ANTIGRAVITY_API_KEY}"
+STATE_PREFIX_RAW="${STATE_PREFIX:-$POLLER_NAME}"
+STATE_PREFIX_SAFE="$(printf "%s" "$STATE_PREFIX_RAW" | tr -cs '[:alnum:]' '_' | tr '[:upper:]' '[:lower:]')"
+SEEN_IDS_FILE="/tmp/${STATE_PREFIX_SAFE}_room_autopost_seen_ids.txt"
+ACKED_IDS_FILE="/tmp/${STATE_PREFIX_SAFE}_room_autopost_acked_ids.txt"
+LOCK_FILE="/tmp/${STATE_PREFIX_SAFE}_room_autopost.pid"
+
+API_KEY="${API_KEY:-}"
+if [[ -z "${API_KEY:-}" ]]; then
+  IFS=',' read -r -a API_KEY_ENV_ARRAY <<< "$API_KEY_ENV_CANDIDATES"
+  for raw_key_name in "${API_KEY_ENV_ARRAY[@]}"; do
+    key_name="$(echo "$raw_key_name" | xargs)"
+    [[ -z "$key_name" ]] && continue
+    if [[ -n "${!key_name:-}" ]]; then
+      API_KEY="${!key_name}"
+      break
+    fi
+    env_line="$(grep "^${key_name}=" "$ENV_FILE" | head -n1 || true)"
+    if [[ -n "$env_line" ]]; then
+      API_KEY="${env_line#*=}"
+      break
+    fi
+  done
+fi
+if [[ -z "${API_KEY:-}" ]]; then
+  echo "Missing API key in $ENV_FILE. Tried: ${API_KEY_ENV_CANDIDATES}"
+  exit 1
+fi
 
 has_id() {
   local file="$1"
@@ -137,7 +158,7 @@ is_low_value_bot_ack() {
     return 0
   fi
   # Ignore very short bot pings unless explicitly aimed at us.
-  if [[ "$from_handle" == @* ]] && [[ ${#lc} -lt 48 ]] && [[ "$lc" != *"@antigravity"* ]] && [[ "$lc" != *"codex"* ]]; then
+  if [[ "$from_handle" == @* ]] && [[ ${#lc} -lt 48 ]] && [[ "$lc" != *"$AGENT_HANDLE_LC"* ]] && [[ "$lc" != *"codex"* ]]; then
     return 0
   fi
   return 1
@@ -161,10 +182,10 @@ build_smart_reply() {
     return 0
   fi
 
-  local out_file="/tmp/antigravity_codex_reply_last.txt"
-  local prompt_file="/tmp/antigravity_codex_reply_prompt.txt"
+  local out_file="/tmp/${STATE_PREFIX_SAFE}_codex_reply_last.txt"
+  local prompt_file="/tmp/${STATE_PREFIX_SAFE}_codex_reply_prompt.txt"
   cat > "$prompt_file" <<EOF
-You are @antigravity in a multi-agent engineering room.
+You are ${AGENT_HANDLE} in a multi-agent engineering room.
 Write one concise, concrete reply to the latest message.
 If no reply is needed, output exactly: NO_REPLY
 
@@ -205,7 +226,7 @@ PY
     echo ""
     return 0
   fi
-  echo "@${from_handle#@} [ag-codex] ${reply:0:900}"
+  echo "@${from_handle#@} [${POLLER_NAME}-codex] ${reply:0:900}"
 }
 
 build_force_fallback_reply() {
@@ -218,14 +239,14 @@ build_force_fallback_reply() {
     return 0
   fi
   if [[ "$lc" == *"stay up"* || "$lc" == *"off screen"* || "$lc" == *"keep polling"* || "$lc" == *"not responding"* ]]; then
-    echo "@${from_handle#@} [ag-codex] applied. I am live in tmux poll mode and will keep polling every ${POLL_INTERVAL}s. I will post concrete action updates, not only ack."
+    echo "@${from_handle#@} [${POLLER_NAME}-codex] applied. I am live in tmux poll mode and will keep polling every ${POLL_INTERVAL}s. I will post concrete action updates, not only ack."
     return 0
   fi
   if [[ "$NO_PLACEHOLDER_ACK" == "1" ]]; then
-    echo "@${from_handle#@} [ag-codex] smart auto-reply unavailable for this request right now. Poller is live (${POLL_INTERVAL}s). Placeholder 'on it' ack is disabled."
+    echo "@${from_handle#@} [${POLLER_NAME}-codex] smart auto-reply unavailable for this request right now. Poller is live (${POLL_INTERVAL}s). Placeholder 'on it' ack is disabled."
     return 0
   fi
-  echo "@${from_handle#@} [ag-codex] ack. Poller is live (${POLL_INTERVAL}s)."
+  echo "@${from_handle#@} [${POLLER_NAME}-codex] ack. Poller is live (${POLL_INTERVAL}s)."
 }
 
 seconds_since_iso() {
@@ -270,12 +291,12 @@ should_force_reply() {
   fi
   # If clearly addressed to another agent only, do not force.
   if [[ "$lc" == *"@claudemm"* || "$lc" == *"@geminimb"* || "$lc" == *" claudemm"* || "$lc" == *" geminimb"* ]]; then
-    if [[ "$lc" != *"@antigravity"* && "$lc" != *"codex"* && "$lc" != *"all of you"* ]]; then
+    if [[ "$lc" != *"$AGENT_HANDLE_LC"* && "$lc" != *"codex"* && "$lc" != *"all of you"* ]]; then
       return 1
     fi
   fi
-  # Direct task requests aimed at antigravity/codex or the whole room.
-  if [[ "$lc" == *"@antigravity"* || "$lc" == *"codex"* || "$lc" == *"all of you"* ]]; then
+  # Direct task requests aimed at this agent/codex or the whole room.
+  if [[ "$lc" == *"$AGENT_HANDLE_LC"* || "$lc" == *"codex"* || "$lc" == *"all of you"* ]]; then
     if [[ "$lc" == *"can you"* || "$lc" == *"please"* || "$lc" == *"need to"* || "$lc" == *"check"* || "$lc" == *"fix"* || "$lc" == *"review"* || "$lc" == *"update"* || "$lc" == *"respond"* || "$lc" == *"deploy"* || "$lc" == *"test"* || "$lc" == *"repo files good"* || "$lc" == *"are the repo files good"* ]]; then
       return 0
     fi
@@ -376,8 +397,10 @@ if [[ "${1:-}" == "tmux" ]]; then
         exit 0
       fi
       # Forward all relevant env vars into the tmux child session
-      local env_prefix=""
+      env_prefix=""
       for var in ROOMS POLL_INTERVAL FETCH_LIMIT MENTION_ONLY SMART_MODE \
+                 POLLER_NAME SESSION AGENT_HANDLE SOURCE_TAG API_KEY_ENV_CANDIDATES \
+                 STATE_PREFIX \
                  CODEX_WORKDIR SMART_TIMEOUT_SEC CODEX_APPROVAL_POLICY \
                  CODEX_SANDBOX_MODE MAX_REPLY_AGE_SEC SKIP_PRESTART_BACKLOG \
                  NO_PLACEHOLDER_ACK PRIME_ON_START RESPOND_TO_HANDLE \
@@ -401,8 +424,8 @@ fi
 if [[ -f "$LOCK_FILE" ]]; then
   OLD_PID="$(cat "$LOCK_FILE" 2>/dev/null || true)"
   if [[ -n "$OLD_PID" ]] && kill -0 "$OLD_PID" 2>/dev/null; then
-    echo "Another antigravity poller already running (PID $OLD_PID). Exiting."
-    exit 0
+        echo "Another ${POLLER_NAME} poller already running (PID $OLD_PID). Exiting."
+        exit 0
   fi
   rm -f "$LOCK_FILE"
 fi
@@ -417,21 +440,22 @@ if [[ "$PRIME_ON_START" == "1" ]] && [[ ! -s "$SEEN_IDS_FILE" ]]; then
     [[ -z "$room" ]] && continue
     prime_seen_ids "$room"
   done
-  echo "[antigravity-autopost] primed seen ids on cold start"
+  echo "[${POLLER_NAME}-autopost] primed seen ids on cold start"
 fi
 
-echo "[antigravity-autopost] === startup self-check ==="
-echo "[antigravity-autopost] rooms=$ROOMS_CSV"
-echo "[antigravity-autopost] poll=${POLL_INTERVAL}s limit=${FETCH_LIMIT} mention_only=$MENTION_ONLY"
-echo "[antigravity-autopost] smart_mode=$SMART_MODE codex_approval=$CODEX_APPROVAL_POLICY sandbox=$CODEX_SANDBOX_MODE"
-echo "[antigravity-autopost] skip_prestart=$SKIP_PRESTART_BACKLOG no_placeholder=$NO_PLACEHOLDER_ACK max_reply_age=${MAX_REPLY_AGE_SEC}s"
-echo "[antigravity-autopost] codex_workdir=$CODEX_WORKDIR smart_timeout=${SMART_TIMEOUT_SEC}s"
-echo "[antigravity-autopost] seen=$SEEN_IDS_FILE acked=$ACKED_IDS_FILE"
-echo "[antigravity-autopost] api_key=${API_KEY:0:8}..."
+echo "[${POLLER_NAME}-autopost] === startup self-check ==="
+echo "[${POLLER_NAME}-autopost] rooms=$ROOMS_CSV"
+echo "[${POLLER_NAME}-autopost] poll=${POLL_INTERVAL}s limit=${FETCH_LIMIT} mention_only=$MENTION_ONLY"
+echo "[${POLLER_NAME}-autopost] agent_handle=$AGENT_HANDLE"
+echo "[${POLLER_NAME}-autopost] smart_mode=$SMART_MODE codex_approval=$CODEX_APPROVAL_POLICY sandbox=$CODEX_SANDBOX_MODE"
+echo "[${POLLER_NAME}-autopost] skip_prestart=$SKIP_PRESTART_BACKLOG no_placeholder=$NO_PLACEHOLDER_ACK max_reply_age=${MAX_REPLY_AGE_SEC}s"
+echo "[${POLLER_NAME}-autopost] codex_workdir=$CODEX_WORKDIR smart_timeout=${SMART_TIMEOUT_SEC}s"
+echo "[${POLLER_NAME}-autopost] seen=$SEEN_IDS_FILE acked=$ACKED_IDS_FILE"
+echo "[${POLLER_NAME}-autopost] api_key=${API_KEY:0:8}..."
 if [[ "$SMART_MODE" == "1" ]] && ! command -v codex >/dev/null 2>&1; then
-  echo "[antigravity-autopost] WARNING: SMART_MODE=1 but codex CLI not found — will fall back to canned replies"
+  echo "[${POLLER_NAME}-autopost] WARNING: SMART_MODE=1 but codex CLI not found — will fall back to canned replies"
 fi
-echo "[antigravity-autopost] === ready ==="
+echo "[${POLLER_NAME}-autopost] === ready ==="
 
 while true; do
   for raw_room in "${ROOMS_ARRAY[@]}"; do
@@ -476,6 +500,7 @@ while true; do
       post_reply "$room" "$from_handle" "$created_at" "$msg_key" "$body_preview" || true
     done < <(echo "$response" | python3 -c '
 import json, re, sys
+agent_handle = sys.argv[1]
 try:
     data = json.load(sys.stdin, strict=False)
 except Exception:
@@ -485,9 +510,9 @@ for m in data.get("messages", []):
     frm = m.get("from", "")
     created = m.get("created_at", "")
     body = (m.get("body", "") or "").replace("\n", " ").replace("\t", " ")
-    mentioned = "1" if re.search(r"@antigravity\b", body, re.IGNORECASE) else "0"
+    mentioned = "1" if re.search(rf"{re.escape(agent_handle)}\b", body, re.IGNORECASE) else "0"
     print(f"{mid}\t{frm}\t{created}\t{mentioned}\t{body}")
-')
+' "$AGENT_HANDLE")
   done
 
   sleep "$POLL_INTERVAL"

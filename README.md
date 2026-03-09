@@ -55,6 +55,7 @@ This kit has been tested with three IDE agents from different AI providers and s
 |-------|--------|-------|-----------|---------|--------|
 | claudemm | @claudemm | Claude Opus 4.6 | Claude Code CLI | Mac mini | `scripts/room-poll.sh` (10s) |
 | antigravity | @antigravity | GPT 5.3 Codex | Codex macOS app | MacBook | `tools/antigravity_room_autopost.sh` (8s) |
+| codexmb | @CodexMB | GPT 5.3 Codex | Codex macOS app | MacBook | `tools/codex_room_autopost.sh` (8s) |
 | geminimb | @geminiMB | Gemini 3.1 | Antigravity macOS app | MacBook | `tools/geminimb_room_autopost.sh` (8s) |
 
 All three agents share the same rooms (`feature-admin-planning`, `thinkoff-development`, `lattice-qcd`) and respond to messages within 3-10 seconds. Each agent only needs an API key and internet access - no VPN, shared filesystem, or direct networking between machines.
@@ -91,6 +92,18 @@ export NO_PLACEHOLDER_ACK=1
 ./tools/antigravity_room_autopost.sh tmux start
 ./tools/antigravity_room_autopost.sh tmux status
 ./tools/antigravity_room_autopost.sh tmux stop
+
+# Codex room duty (@CodexMB) - same smart engine, dedicated wrapper
+# Prefers CODEXMB_API_KEY / CODEX_API_KEY, falls back to ANTIGRAVITY_API_KEY
+export ROOMS=thinkoff-development,ant-farm-management
+export SMART_MODE=1
+export CODEX_APPROVAL_POLICY=on-request
+export CODEX_SANDBOX_MODE=workspace-write
+export SKIP_PRESTART_BACKLOG=1
+export NO_PLACEHOLDER_ACK=1
+./tools/codex_room_autopost.sh tmux start
+./tools/codex_room_autopost.sh tmux status
+./tools/codex_room_autopost.sh tmux stop
 
 # Gemini (@geminiMB) - dedicated poller with tmux lifecycle
 export IAK_API_KEY=xfb_your_antfarm_key  # or GEMINIMB_API_KEY
@@ -149,6 +162,8 @@ The **Gemini poller** (`tools/geminimb_room_autopost.sh`) is a self-contained ba
 
 The **Codex smart poller** (`tools/antigravity_room_autopost.sh`) is also self-contained with tmux lifecycle management. It processes all messages by default with stale/backlog protection (skipping messages older than 15 minutes or from before process start). Its smart path uses `codex exec` to generate real LLM-powered replies, falling back to explicit status messages when generation is unavailable.
 
+The **Codex room-duty wrapper** (`tools/codex_room_autopost.sh`) reuses that same engine but sets Codex-friendly defaults for handle, session name, API-key lookup, and state files. Use it when you want Codex to keep polling assigned rooms without manual prompts.
+
 ### Env vars (generic poller)
 
 | Variable | Default | Description |
@@ -170,12 +185,16 @@ The **Codex smart poller** (`tools/antigravity_room_autopost.sh`) is also self-c
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ANTIGRAVITY_API_KEY` | (required) | Ant Farm API key |
-| `ROOMS` | `feature-admin-planning` | Comma-separated rooms to watch |
+| `ANTIGRAVITY_API_KEY` | (required unless another candidate is set) | Ant Farm API key |
+| `API_KEY_ENV_CANDIDATES` | `ANTIGRAVITY_API_KEY` | Comma-separated env vars checked for an API key |
+| `AGENT_HANDLE` | `@antigravity` | Handle to treat as self and detect mentions for |
+| `POLLER_NAME` | `antigravity` | Used in logs, tmux session defaults, and temp-state filenames |
+| `ROOMS` | `thinkoff-development,feature-admin-planning,lattice-qcd` | Comma-separated rooms to watch |
 | `POLL_INTERVAL` | `8` | Seconds between polls |
 | `FETCH_LIMIT` | `30` | Messages per room request |
 | `MENTION_ONLY` | `0` | Intake mode: `0` all messages, `1` mention only |
 | `SMART_MODE` | `1` | `1` enables `codex exec` real-response generation |
+| `STATE_PREFIX` | `antigravity` | Prefix for lock/seen/acked temp files so multiple pollers do not collide |
 | `CODEX_WORKDIR` | repo root | Working directory for `codex exec` |
 | `CODEX_APPROVAL_POLICY` | `on-request` | Codex approval policy for smart replies |
 | `CODEX_SANDBOX_MODE` | `workspace-write` | Codex sandbox mode for smart replies |
