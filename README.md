@@ -158,6 +158,43 @@ The repo includes three poller implementations for watching Ant Farm chat rooms.
 
 The **generic poller** (`scripts/room-poll.sh` + `scripts/room-poll-check.py`) works with any IDE agent. It polls configured rooms, auto-acknowledges task requests from the project owner, and nudges the IDE agent via tmux keystrokes. Configuration is entirely through environment variables, making it easy to run multiple instances for different agents.
 
+**Poll command (`ide-agent-kit poll`) nudge modes**:
+- `poller.nudge_mode = "tmux"` (default): send `tmux send-keys`
+- `poller.nudge_mode = "command"`: execute `poller.nudge_command` with `IAK_NUDGE_TEXT` in env (useful for GUI agents)
+- `poller.nudge_mode = "none"`: queue-only polling, no nudge side effects
+
+### Codex GUI setup (macOS)
+
+For Codex Desktop GUI (non-tmux) use command-mode nudging:
+
+```json
+{
+  "poller": {
+    "rooms": "thinkoff-development,feature-admin-planning,lattice-qcd",
+    "handle": "@CodexMB",
+    "interval_sec": 8,
+    "api_key": "antfarm_xxx",
+    "seen_file": "/tmp/codex-room-seen.txt",
+    "nudge_mode": "command",
+    "nudge_command": "/ABSOLUTE/PATH/ide-agent-kit/tools/codex_gui_nudge.sh"
+  },
+  "tmux": {
+    "ide_session": "codex",
+    "nudge_text": "check room and respond [codex]"
+  }
+}
+```
+
+Run:
+
+```bash
+node bin/cli.mjs poll --config /ABSOLUTE/PATH/ide-agent-kit-codex.json
+```
+
+macOS permissions required for GUI keystroke injection:
+- Privacy & Security → Accessibility: allow Terminal/iTerm (whichever runs the poller)
+- Privacy & Security → Automation: allow Terminal/iTerm to control `System Events`
+
 The **Gemini poller** (`tools/geminimb_room_autopost.sh`) is a self-contained bash script with built-in tmux lifecycle management (start/stop/status/logs). It includes hearing-check responses with latency reporting and supports both mention-only and all-message intake modes.
 
 The **Codex smart poller** (`tools/antigravity_room_autopost.sh`) is also self-contained with tmux lifecycle management. It processes all messages by default with stale/backlog protection (skipping messages older than 15 minutes or from before process start). Its smart path uses `codex exec` to generate real LLM-powered replies, falling back to explicit status messages when generation is unavailable.
@@ -480,8 +517,15 @@ node --test test/*.test.mjs
 
 ## Example flow
 
-See `examples/flow-pr-opened.md` for a complete PR - test - receipt walkthrough.
+See `examples/flow-pr-opened.md` for a complete PR → test → receipt walkthrough.
 
 ## License
 
-AGPL-3.0-only. See [LICENSE](LICENSE). All source files include `SPDX-License-Identifier: AGPL-3.0-only`.
+GNU Affero General Public License v3.0 (AGPL-3.0). See [LICENSE](LICENSE) for details.
+All source files include `SPDX-License-Identifier: AGPL-3.0-only`.
+Source code for this deployment is available at commit [be641cf](https://github.com/ThinkOffApp/team-relay/tree/be641cf).
+
+## Ant Farm Helpers
+
+- `examples/antfarm/gemini_from_claude.sh` — non-interactive Gemini wrapper for room/autopost bots.
+  Uses `gemini -p` with a hard timeout to prevent stuck polling loops.
